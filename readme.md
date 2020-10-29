@@ -7,7 +7,7 @@ Most of the codes have been reviewed, and placed at a proper place in the projec
 All useful commands is placed in the `bin` folder:
 * `create_mbr <output_mbr.bin>` to create master boot record (MBR) section image
 * `create_system_image <input_folder> <output_system.bin>` to create system partition image
-* `create_data_image <data_foler> <output_folder> <output_data.bin>` to create data partition image, usually containing opks and others
+* `create_data_image <apps_folder> <cache_folder> <output_data.bin>` to create data partition image, usually containing apps 
 * `make_sdcard_image <mbr.bin> <ubiboot.bin> <system.bin> <data.bin> <output_sd_card.img>` to create image for SD Card direct flushing
 
 The `ubiboot.bin` is generated from ubiboot project, not the duty of this project.

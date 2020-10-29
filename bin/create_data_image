@@ -7,13 +7,13 @@ BASE_DIR=$(dirname "$0")
 TMP_DIR=$2/tmp_data
 
 echo "Gathering applications..."
-mapfile -d $'\0' APPS < <(find $1/apps/ -maxdepth 1 -type f -name '*.opk' -print0)
+mapfile -d $'\0' APPS < <(find $1/ -maxdepth 1 -type f -name '*.opk' -print0)
 if (( ${#APPS[@]} )); then
 	echo "${#APPS[@]} applications"
 	du -Lhc "${APPS[@]}"
-	APPS_SIZE="$(du -Lbc apps/*.opk | tail -1 | cut -f1)"
+	APPS_SIZE="$(du -Lbc $1/*.opk | tail -1 | cut -f1)"
 else
-	echo "No application found in apps/*.opk"
+	echo "No application found in $1/*.opk"
 	APPS_SIZE=0
 fi
 echo
