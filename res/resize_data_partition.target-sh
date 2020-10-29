@@ -1,0 +1,80 @@
+#!/bin/sh
+
+set -e
+
+on_error() {
+	echo "ERROR. Continuing in 10 seconds..."
+	sleep 10
+}
+
+# Early exit is an error. This trap is cleared before normal exit.
+trap on_error EXIT
+
+DEVICE=mmcblk0
+PART_NUM=2
+
+DEVICE_SIZE=`cat /sys/block/${DEVICE}/size`
+START=`partx /dev/${DEVICE} -n ${PART_NUM} -g -o start`
+SIZE=$((${DEVICE_SIZE} - ${START}))
+
+mount_data_partition() {
+	echo "Mounting the partition..."
+	/bin/mount -o remount,rw /media
+	/bin/mount "/dev/${DEVICE}p${PART_NUM}" /media/data
+	/bin/mount -o remount,ro /media
+}
+
+unmount_data_partition() {
+	echo "Unmounting the partition..."
+	/bin/mount -o remount,rw /media
+	if ! /bin/umount /media/data; then
+		echo "Umount failed. Trying again in 3 seconds..."
+		sleep 3
+		if ! /bin/umount /media/data; then
+			echo "Failed to unmount the partition. Aborting resize."
+			return 1
+		fi
+	fi
+	/bin/mount -o remount,ro /media
+}
+
+clear
+echo 1 > /sys/devices/virtual/vtconsole/vtcon1/bind
+echo "Resizing the data partition."
+echo "This will take a few minutes"
+
+# Unmount data partition before resizing for faster resizing.
+unmount_data_partition
+# Try to remount the data partition on error (early EXIT is an error).
+trap - EXIT
+trap 'on_error; mount_data_partition' EXIT
+echo
+
+echo "Updating partition table..."
+SFDISK_OPTS="--no-reread --quiet -uS -N ${PART_NUM}"
+# Older versions of sfdisk do not support --no-tell-kernel.
+HAS_NO_TELL_KERNEL=n
+if sfdisk --help | grep -- --no-tell-kernel > /dev/null; then
+	HAS_NO_TELL_KERNEL=y
+	SFDISK_OPTS="${SFDISK_OPTS} --no-tell-kernel"
+fi
+echo "${START},${SIZE}" | sfdisk ${SFDISK_OPTS} /dev/${DEVICE}
+if [ "$HAS_NO_TELL_KERNEL" = n ]; then
+	echo "Re-reading error above is expected."
+fi
+resizepart /dev/${DEVICE} ${PART_NUM} ${SIZE}
+echo
+
+# Check partition to prevent resize from failling
+e2fsck -f /dev/${DEVICE}p${PART_NUM}
+
+# Then resize
+resize2fs /dev/${DEVICE}p${PART_NUM}
+
+# Clear the trap that attempts to mount the partition.
+trap - EXIT
+mount_data_partition
+
+rm /media/data/local/etc/init.d/S00resize
+rm /media/data/resize_data_partition.sh
+rm "$0"

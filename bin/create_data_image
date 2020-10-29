@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+BASE_DIR=$(dirname "$0")
+
+TMP_DIR=$2/tmp_data
+
+echo "Gathering applications..."
+mapfile -d $'\0' APPS < <(find $1/apps/ -maxdepth 1 -type f -name '*.opk' -print0)
+if (( ${#APPS[@]} )); then
+	echo "${#APPS[@]} applications"
+	du -Lhc "${APPS[@]}"
+	APPS_SIZE="$(du -Lbc apps/*.opk | tail -1 | cut -f1)"
+else
+	echo "No application found in apps/*.opk"
+	APPS_SIZE=0
+fi
+echo
+
+echo "Preparing apps for the data partition..."
+rm -rf "$TMP_DIR"
+mkdir "$TMP_DIR"
+install -m 755 -d "$TMP_DIR"
+if (( ${#APPS[@]} )); then
+	install -m 644 -t "${TMP_DIR}/apps/" "${APPS[@]}"
+fi
+
+echo "Preparing first-time resizing script for the data partition..."
+install -m 755 -d "${TMP_DIR}/local/etc/init.d"
+install -m 755 ${BASE_DIR}/../res/resize_data_partition_launcher.target-sh "${TMP_DIR}/local/etc/init.d/S00resize"
+install -m 755 ${BASE_DIR}/../res/resize_data_partition.target-sh "${TMP_DIR}/resize_data_partition.sh"
+
+# Pick a partition size that is large enough to contain all files but not much
+# larger so the image stays small.
+IMAGE_SIZE=$((8 + APPS_SIZE / (920*1024)))
+
+echo "Creating data partition of ${IMAGE_SIZE} MiB..."
+dd if=/dev/zero "of=$3" bs=1M count=${IMAGE_SIZE}
+MKE2FS_CONFIG="${BASE_DIR}/../res/mke2fs.conf" /sbin/mke2fs -t od-data \
+  -d "${TMP_DIR}" -F "$3"
+rm -rf "${TMP_DIR}"

@@ -1,0 +1,96 @@
+#!/bin/bash
+
+set -e
+
+BASE_DIR=$(dirname "$0")
+
+source ${BASE_DIR}/../conf/partition_layout.sh
+
+if ! which mcopy > /dev/null; then
+	echo "Please install the 'mtools' package."
+	exit 1
+fi
+
+echo "Checking presence of kernel files..."
+if test -f "$1/vmlinuz.bin"; then
+	SIZE=$(stat -Lc %s "$1/vmlinuz.bin")
+	echo "  vmlinuz.bin: $((${SIZE} / 1024)) KiB"
+else
+	echo "Missing main kernel: vmlinuz.bin"
+	exit 1
+fi
+
+if test -f "$1/vmlinuz.bak"; then
+	SIZE=$(stat -Lc %s "$1/vmlinuz.bak")
+	echo "  vmlinuz.bak: $((${SIZE} / 1024)) KiB"
+else
+	echo "Missing fallback kernel: vmlinuz.bak"
+	exit 1
+fi
+
+echo "Checking presence of mininit-syspart..."
+if test -f "$1/mininit-syspart"; then
+	SIZE=$(stat -Lc %s "$1/mininit-syspart")
+	echo "  mininit-syspart: $((${SIZE} / 1024)) KiB"
+else
+	echo "Missing program: mininit-syspart"
+	exit 1
+fi
+
+echo "Checking presence of modules filesystem..."
+if test -f "$1/modules.squashfs"; then
+	SIZE=$(stat -Lc %s "$1/modules.squashfs")
+	echo "  modules.squashfs: $((${SIZE} / 1024)) KiB"
+else
+	echo "Missing modules filesystem: modules.squashfs"
+	exit 1
+fi
+
+if test -f "$1/modules.squashfs.bak"; then
+	SIZE=$(stat -Lc %s "$1/modules.squashfs.bak")
+	echo "  modules.squashfs.bak: $((${SIZE} / 1024)) KiB"
+else
+	echo "Missing fallback modules filesystem: modules.squashfs.bak"
+	exit 1
+fi
+
+echo "Checking presence of root filesystem..."
+if test -f "$1/rootfs.squashfs"; then
+	SIZE=$(stat -Lc %s "$1/rootfs.squashfs")
+	echo "  rootfs.squashfs: $((${SIZE} / 1024)) KiB"
+else
+	echo "Missing root filesystem: rootfs.squashfs"
+	exit 1
+fi
+
+echo "Creating system partition..."
+IMAGE_SIZE=$((${DATA_START} - ${SYSTEM_START}))
+dd if=/dev/zero "of=$2" bs=512 count=${IMAGE_SIZE} status=noxfer
+/sbin/mkdosfs -s 8 -F 32 "$2"
+echo
+
+echo "Making directories..."
+mmd -i "$2" ::dev ::root
+
+echo "Install vmlinuz.bin..."
+mcopy -i "$2" "$1/vmlinuz.bin" ::vmlinuz.bin
+sha1sum "$1/vmlinuz.bin" | cut -d' ' -f1 | mcopy -i "$2" - ::vmlinuz.bin.sha1
+mcopy -i "$2" "$1/vmlinuz.bak" ::vmlinuz.bak
+sha1sum "$1/vmlinuz.bak" | cut -d' ' -f1 | mcopy -i "$2" - ::vmlinuz.bak.sha1
+
+echo "Install mininit-syspart..."
+mcopy -i "$2" "$1/mininit-syspart" ::mininit-syspart
+sha1sum "$1/mininit-syspart" | cut -d' ' -f1 | mcopy -i "$2" - ::mininit-syspart.sha1
+
+echo "Install modules.squashfs..."
+mcopy -i "$2" "$1/modules.squashfs" ::modules.squashfs
+sha1sum "$1/modules.squashfs" | cut -d' ' -f1 | mcopy -i "$2" - ::modules.squashfs.sha1
+mcopy -i "$2" "$1/modules.squashfs.bak" ::modules.squashfs.bak
+sha1sum "$1/modules.squashfs.bak" | cut -d' ' -f1 | mcopy -i "$2" - ::modules.squashfs.bak.sha1
+
+echo "Install rootfs.squashfs..."
+mcopy -i "$2" "$1/rootfs.squashfs" ::rootfs.squashfs
+sha1sum "$1/rootfs.squashfs" | cut -d' ' -f1 | mcopy -i "$2" - ::rootfs.squashfs.sha1
+
+echo "Minimizing image size..."
+${BASE_DIR}/../tool/trim_fat.py "$2"

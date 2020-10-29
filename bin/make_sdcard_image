@@ -1,0 +1,11 @@
+#!/bin/bash
+
+BASE_DIR=$(dirname "$0")
+
+source ${BASE_DIR}/../conf/partition_layout.sh
+
+( cp $1 $5 &&
+  dd if=$2 of=$5 ibs=512 seek=1 &&
+  dd if=$3 of=$5 ibs=512 seek=${SYSTEM_START} &&
+  dd if=$4 of=$5 ibs=512 seek=${DATA_START}
+) || rm -f $5
