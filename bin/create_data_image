@@ -21,6 +21,7 @@ echo
 echo "Preparing apps for the data partition..."
 rm -rf "$TMP_DIR"
 mkdir "$TMP_DIR"
+mkdir "${TMP_DIR}/apps"
 install -m 755 -d "$TMP_DIR"
 if (( ${#APPS[@]} )); then
 	install -m 644 -t "${TMP_DIR}/apps/" "${APPS[@]}"
